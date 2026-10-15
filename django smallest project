@@ -1,0 +1,37 @@
+<!-- Django small project
+  django-admin startproject myapp .(in main folder)
+Koi folder change (cd) nahi karna hai, seedhe ye command chalayein:
+python manage.py startproject app
+INSTALLED_APPS me myapp add kiya
+  -->
+
+ '''______________________________________________________________________________________''' 
+  '''myapp/urls.py'''
+  from django.urls import path
+from . import views
+
+urlpatterns=[
+    path('home/',views.home,name='home'),    
+]
+'''______________________________________________________________________________________''' 
+
+
+'''project/urls.py'''  
+from django.contrib import admin
+from django.urls import path,include
+  
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('',include('myapp.urls')),
+]
+  '''______________________________________________________________________________________''' 
+from django.shortcuts import render
+from django.http import HttpResponse
+
+def home(request):
+    return HttpResponse("<h1>Namaste! Yeh django ka ek sbse chhota mera mini project.</h1>")
+        '''______________________________________________________________________________________''' 
+
+      ''' save one by one all file(white dot will have been disappered)
+      
+      
