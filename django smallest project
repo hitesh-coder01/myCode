@@ -1,7 +1,7 @@
 <!-- Django small project
-  django-admin startproject myapp .(in main folder)
+  django-admin startproject myproject .(in main folder)
 Koi folder change (cd) nahi karna hai, seedhe ye command chalayein:
-python manage.py startproject app
+python manage.py start app
 INSTALLED_APPS me myapp add kiya
   -->
 
