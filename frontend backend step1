@@ -1,0 +1,201 @@
+''' project step 1.A '''
+
+<!-- Django Smallest Project Setup -->
+
+
+1. Main folder me terminal kholein:
+   django-admin startproject myproject .
+   python manage.py startapp myapp
+
+2. settings.py:
+   INSTALLED_APPS me 'myapp' add karein.
+
+3. myapp folder ke andar new file banayein: urls.py
+
+--------------------------------------------------
+'''myproject/urls.py'''
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('myapp.urls')),
+]
+
+--------------------------------------------------
+'''myapp/urls.py'''
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.home, name='home'),  # Direct root URL par chalega
+]
+
+--------------------------------------------------
+'''myapp/views.py'''
+from django.http import HttpResponse
+
+def home(request):
+    return HttpResponse("<h1>Namaste! Yeh django ka ek sbse chhota mera mini project.</h1>")
+
+--------------------------------------------------
+4. Run Server:
+   python manage.py runserver
+   Browser me dekhein: http://127.0.0.1:8000/
+
+
+
+''' save one by one all file(white dot will have been disappered)'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+	 ''' _____________________________________________________________________________
+		&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		______________________________________________________________________________
+	  '''
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+"""Step 1.b: DRF Layer (JSON API banana)
+pip install djangorestframework django-cors-headers  (terminal me chalana)
+
+
+
+
+
+2. settings.py mein 3 choti cheezein add karein
+INSTALLED_APPS = [
+    # ... purane apps ...
+    'corsheaders',            # <-- Add karein
+    'rest_framework',         # <-- Add karein
+    'myapp',
+]                                                     (2 app add krna)
+
+
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # <-- Yeh pehle add karein
+    # ... baaki sab waisa hi rehne dein ...
+]
+
+setting.py last me CORS allow karne ke liye yeh line likh dein:
+CORS_ALLOW_ALL_ORIGINS = True
+(Iska matlab hai React kisi bhi port se request karega, toh Django use block nahi karega).
+
+
+
+
+
+
+
+3. myapp/views.py ko API View banayein(ye replace kre code "views" me) :
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+@api_view(['GET'])
+def home(request):
+    data = {
+        "message": "Namaste! Yeh Django DRF ka pehla API response hai.",
+        "status": "success"
+    }
+    return Response(data)
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+''' _____________________________________________________________________________
+		&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		______________________________________________________________________________
+	  '''
+
+
+
+
+
+
+
+
+
+
+
+Step 1.c:
+React Layer (Frontend Setup & API connect)
+
+Naya Terminal Kholein: ctrl+shift+`
+Terminal mein usi main folder ke andar command chalayein:
+npm create vite@latest frontend -- --template react
+(kuch step aayegi first time setup krte time)
+then 
+ctrl+c   then
+cd frontend
+npm install axios
+npm run dev
+
+
+frontend/src/App.jsx file kholein, uska sara code hata dein aur yeh chhota code paste karein:
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    // Django API ko call kar rahe hain
+    axios.get('http://127.0.0.1:8000/')
+      .then(response => {
+        setData(response.data)
+      })
+      .catch(error => {
+        console.error("API error:", error)
+      })
+  }, [])
+
+  return (
+    <div style={{ textAlign: 'center', marginTop: '50px', fontFamily: 'Arial' }}>
+      <h1>React + Django DRF (Step 1 Complete)</h1>
+      {data ? (
+        <div style={{ border: '2px solid green', padding: '20px', display: 'inline-block' }}>
+          <h3>Backend se aaya hua data:</h3>
+          <p>{data.message}</p>
+          <p>Status: <strong>{data.status}</strong></p>
+        </div>
+      ) : (
+        <p>Loading backend data...</p>
+      )}
+    </div>
+  )
+}
+
+export default App
+
