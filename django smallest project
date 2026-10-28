@@ -1,37 +1,48 @@
-<!-- Django small project
-  django-admin startproject myproject .(in main folder)
-Koi folder change (cd) nahi karna hai, seedhe ye command chalayein:
-python manage.py start app
-INSTALLED_APPS me myapp add kiya
-  -->
 
- '''______________________________________________________________________________________''' 
-  '''myapp/urls.py'''
-  from django.urls import path
-from . import views
+<!-- Django Smallest Project Setup -->
 
-urlpatterns=[
-    path('home/',views.home,name='home'),    
-]
-'''______________________________________________________________________________________''' 
+1. Main folder me terminal kholein:
+   django-admin startproject myproject .
+   python manage.py startapp myapp
 
+2. settings.py:
+   INSTALLED_APPS me 'myapp' add karein.
 
-'''project/urls.py'''  
+3. myapp folder ke andar new file banayein: urls.py
+
+--------------------------------------------------
+'''myproject/urls.py'''
 from django.contrib import admin
-from django.urls import path,include
-  
+from django.urls import path, include
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('',include('myapp.urls')),
+    path('', include('myapp.urls')),
 ]
-  '''______________________________________________________________________________________''' 
-from django.shortcuts import render
+
+--------------------------------------------------
+'''myapp/urls.py'''
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.home, name='home'),  # Direct root URL par chalega
+]
+
+--------------------------------------------------
+'''myapp/views.py'''
 from django.http import HttpResponse
 
 def home(request):
     return HttpResponse("<h1>Namaste! Yeh django ka ek sbse chhota mera mini project.</h1>")
-        '''______________________________________________________________________________________''' 
 
-      ''' save one by one all file(white dot will have been disappered)
+--------------------------------------------------
+4. Run Server:
+   python manage.py runserver
+   Browser me dekhein: http://127.0.0.1:8000/
+
+
+
+''' save one by one all file(white dot will have been disappered)'''
       
       
