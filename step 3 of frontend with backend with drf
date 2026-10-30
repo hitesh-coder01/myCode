@@ -1,0 +1,247 @@
+Step 3: Create & Delete Operations
+Step 3.a: Django Base & DRF Layer (POST & DELETE APIs)
+
+
+
+--------------------
+1. myapp/views.py ko update karein
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Task
+from .serializers import TaskSerializer
+
+# 1. GET (Saare tasks lana) aur POST (Naya task create karna)
+@api_view(['GET', 'POST'])
+def task_list(request):
+    if request.method == 'GET':
+        tasks = Task.objects.all()
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 2. DELETE (Kisi specific task ko ID ke hisaab se delete karna)
+@api_view(['DELETE'])
+def task_delete(request, pk):
+    try:
+        task = Task.objects.get(id=pk)
+        task.delete()
+        return Response({'message': 'Task deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+		
+		
+		
+		
+		
+		
+
+
+----------------------
+2. myapp/urls.py mein Delete ka URL jodein
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.task_list, name='task-list'),
+    path('delete/<int:pk>/', views.task_delete, name='task-delete'),
+]	
+
+
+
+
+
+
+----------
+theory of step 3.a
+React se jo JSON data form ke zariye aayega, DRF use seedha request.data mein pack kar deta hai.
+serializer.is_valid(): Yeh check karta hai ki database ke rules follow hue ya nahi (jaise title blank toh nahi hai). Agar sab theek hai, toh serializer.save() database mein nayi row insert kar deta hai.
+
+
+
+*****************///////////////==============
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------
+Step 3.b: React Layer (Form + Delete Button UI & Logic)
+1. frontend/src/App.jsx ko Update karein
+--
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+
+  // 1. READ: Saare tasks fetch karne ka function
+  const fetchTasks = () => {
+    axios.get('http://127.0.0.1:8000/')
+      .then(response => {
+        setTasks(response.data)
+        setLoading(false)
+      })
+      .catch(error => {
+        console.error("Error fetching tasks:", error)
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    fetchTasks()
+  }, [])
+
+  // 2. CREATE: Form submit hone par naya task POST karna
+  const handleAddTask = (e) => {
+    e.preventDefault()
+    if (!title.trim()) return
+
+    axios.post('http://127.0.0.1:8000/', {
+      title: title,
+      description: description,
+      completed: false
+    })
+    .then(response => {
+      // Backend me save hone ke baad UI list me naya task add karein
+      setTasks([...tasks, response.data])
+      setTitle('')
+      setDescription('')
+    })
+    .catch(error => {
+      console.error("Error adding task:", error)
+    })
+  }
+
+  // 3. DELETE: Specific ID wale task ko delete karna
+  const handleDeleteTask = (id) => {
+    axios.delete(`http://127.0.0.1:8000/delete/${id}/`)
+      .then(() => {
+        // UI list se deleted item ko filter karke hata dein
+        setTasks(tasks.filter(task => task.id !== id))
+      })
+      .catch(error => {
+        console.error("Error deleting task:", error)
+      })
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 py-10 px-4 font-sans">
+      <div className="max-w-2xl mx-auto space-y-8">
+        
+        {/* Header */}
+        <header className="text-center">
+          <h1 className="text-3xl font-extrabold text-slate-800">
+            Django + React Full Stack
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm font-medium">
+            Step 3: Create & Delete Operations (Tailwind UI)
+          </p>
+        </header>
+
+        {/* CREATE FORM */}
+        <form onSubmit={handleAddTask} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-lg font-bold text-slate-800">Add New Item</h2>
+          
+          <div>
+            <input 
+              type="text" 
+              placeholder="Task Title (e.g. Django Auth Setup)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <textarea 
+              placeholder="Description (Optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows="2"
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <button 
+            type="submit" 
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition-colors cursor-pointer"
+          >
+            Add Task
+          </button>
+        </form>
+
+        {/* LIST SECTION */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-slate-800">Your Tasks</h2>
+
+          {loading ? (
+            <div className="text-center py-6 text-slate-500">Loading tasks...</div>
+          ) : tasks.length === 0 ? (
+            <div className="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500">
+              No tasks available. Add one above!
+            </div>
+          ) : (
+            tasks.map(task => (
+              <div 
+                key={task.id} 
+                className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center"
+              >
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">{task.title}</h3>
+                  <p className="text-slate-600 text-sm">{task.description || "No description provided."}</p>
+                  <span className={`inline-block mt-2 text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                    task.completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {task.completed ? 'Completed' : 'Pending'}
+                  </span>
+                </div>
+
+                <button 
+                  onClick={() => handleDeleteTask(task.id)}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+export default App
+
+
+
+
+
+
+
+
+
+---------
+step 3 completed
+ 
