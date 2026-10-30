@@ -1,0 +1,322 @@
+project step 2.a
+1. Database Table define karein (myapp/models.py)
+from django.db import models
+
+class Task(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    completed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.title
+		
+		
+
+
+python manage.py makemigrations
+python manage.py migrate
+
+
+
+
+3. Model ko Admin Panel par register karein (myapp/admin.py)
+from django.contrib import admin
+from .models import Task
+
+admin.site.register(Task)
+
+
+
+
+4. Admin User banayein aur "Data add karein":[jaise learn django,practice react]
+
+python manage.py createsuperuser
+python manage.py runserver
+
+******************************************
+*******************************************
+
+
+
+
+
+
+
+
+
+step2.b
+1. Serializer banayein (myapp/serializers.py):
+from rest_framework import serializers
+from .models import Task
+
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = '__all__'  # id, title, description, completed sabko JSON bana dega
+
+
+-------------------		
+2. View ko update karein (myapp/views.py)
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import Task
+from .serializers import TaskSerializer
+
+@api_view(['GET'])
+def task_list(request):
+    tasks = Task.objects.all()  # Database se saara data nikala
+    serializer = TaskSerializer(tasks, many=True)  # QuerySet ko JSON format me convert kiya
+    return Response(serializer.data)
+	
+	
+	
+-------------------
+3. URL ko connect karein (myapp/urls.py)
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.task_list, name='task-list'),
+]
+
+
+THEORY: Database ke data ko us language mein badalna jo React samajh sake.
+
+
+
+******************************************
+*******************************************
+
+
+
+
+
+
+
+
+---------------------
+step2.C
+---------------------
+1. frontend/src/App.jsx ko Update karein
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  // Ab data ek single object nahi, balki ek empty array [] se shuru hoga
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Backend API se saare tasks mangwa rahe hain
+    axios.get('http://127.0.0.1:8000/')
+      .then(response => {
+        setTasks(response.data)
+        setLoading(false)
+      })
+      .catch(error => {
+        console.error("Error fetching tasks:", error)
+        setLoading(false)
+      })
+  }, [])
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '40px auto', fontFamily: 'Arial, sans-serif' }}>
+      <h1 style={{ textAlign: 'center', color: '#333' }}>My Task / Product List</h1>
+      <p style={{ textAlign: 'center', color: '#666' }}>Fetched directly from Django SQLite Database</p>
+
+      {loading ? (
+        <p style={{ textAlign: 'center' }}>Loading items from backend...</p>
+      ) : tasks.length === 0 ? (
+        <p style={{ textAlign: 'center' }}>Koi task nahi mila! Admin panel se add karein.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {/* .map() se array ka har ek item alag card banega */}
+          {tasks.map(task => (
+            <div 
+              key={task.id} 
+              style={{
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                padding: '16px',
+                backgroundColor: task.completed ? '#e8f5e9' : '#fff',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}
+            >
+              <h3 style={{ margin: '0 0 8px 0', color: '#2c3e50' }}>{task.title}</h3>
+              <p style={{ margin: '0 0 10px 0', color: '#555' }}>
+                {task.description || "No description provided."}
+              </p>
+              <span style={{
+                fontSize: '12px',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                backgroundColor: task.completed ? '#4caf50' : '#ff9800',
+                color: '#fff',
+                fontWeight: 'bold'
+              }}>
+                {task.completed ? 'Completed' : 'Pending'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
+
+
+-----------------------------------------------
+React Code ki Chhoti si Theory:
+useState([]): Shuruat mein tasks ko khali list banaya taaki jab tak backend se data na aaye, .map() error na de.
+
+tasks.map(task => ...): Python ke for task in tasks: loop ki tarah, JavaScript ka .map() array ke har ek element par jata hai aur har element ke liye ek naya <div> return karta hai.
+
+key={task.id}: React ko batana padta hai ki har card unique hai, isliye database ki primary key (task.id) pass ki jati hai.
+
+
+------------------------------------
+Step 2 yahan complete hota hai!Step 1: Plain text API $\rightarrow$ React UI (Connection banaya).   Step 2: SQLite Database (Model) $\rightarrow$ Seria
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+******************************************
+*******************************************
+TAILWIND
+
+# Tailwind CSS (Vite + React) Complete Setup Notes
+
+### Step 1: Terminal Command
+Frontend folder ke terminal me ye run karein:
+npm install tailwindcss @tailwindcss/vite
+
+### Step 2: vite.config.js
+Is file ko open karke plugin add karein:
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+  ],
+})
+
+### Step 3: src/index.css
+Purana code delete karein aur sirf ye ek line likhein:
+@import "tailwindcss";
+
+### Step 4: Run Dev Server
+Terminal me server start karein:
+npm run dev
+
+---
+Important Rules:
+1. tailwind.config.js file banane ki koi zaroorat nahi hai.
+2. postcss.config.js file banane ki zaroorat nahi hai.
+3. @tailwind base, components, utilities ki jagah ab sirf @import "tailwindcss"; chalta hai.
+
+
+*****************///////////////==============
+
+
+
+
+-------------
+Step 4: App.jsx mein Tailwind Classes lagayein
+
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    axios.get('http://127.0.0.1:8000/')
+      .then(response => {
+        setTasks(response.data)
+        setLoading(false)
+      })
+      .catch(error => {
+        console.error("Error fetching tasks:", error)
+        setLoading(false)
+      })
+  }, [])
+
+  return (
+    <div className="min-h-screen bg-slate-100 py-10 px-4 font-sans">
+      <div className="max-w-2xl mx-auto">
+        <header className="text-center mb-8">
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+            Django + React + Tailwind
+          </h1>
+          <p className="text-slate-500 mt-2 text-sm font-medium">
+            Step 2: Database Data with Modern Tailwind UI
+          </p>
+        </header>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-3 text-slate-600 font-medium">Loading items...</span>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-500 border border-slate-200">
+            Koi task nahi mila! Admin panel se add karein.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {tasks.map(task => (
+              <div 
+                key={task.id} 
+                className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex justify-between items-start"
+              >
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-1">
+                    {task.title}
+                  </h3>
+                  <p className="text-slate-600 text-sm">
+                    {task.description || "No description provided."}
+                  </p>
+                </div>
+                
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                  task.completed 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {task.completed ? 'Completed' : 'Pending'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default App
+
+
+
+
+npm run dev
