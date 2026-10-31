@@ -1,0 +1,530 @@
+step 5
+---------
+Step 5.a: User Authentication & Data Separation (Backend Layer)
+-------
+1. settings.py mein Token Auth enable karein
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    
+    # 3rd party apps
+    'corsheaders',
+    'rest_framework',
+    'rest_framework.authtoken',  # <-- Yeh naya jodein (Token database table banata hai)
+    
+    # My apps
+    'myapp',
+]
+
+
+
+-------------
+Usi file (settings.py) ke aakhiri hisse mein default authentication scheme configure karein:
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
+
+
+-------
+File ko Save (Ctrl + S) karein.
+
+
+2. Migration chalakar Token Tables create karein
+python manage.py migrate
+
+3. myapp/models.py ko User ke sath link karein
+Har task kis user ka hai, yeh store karne ke liye Task model mein Django ke built-in User ka relation (ForeignKey) jodna padega.
+myapp/models.py file kholein aur ise update karein:
+
+from django.db import models
+from django.contrib.auth.models import User
+
+class Task(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    completed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.title
+		
+		Terminal mein schema update ke liye migrations chalayein:
+python manage.py makemigrations
+python manage.py migrate
+
+
+
+
+
+
+-----------------
+4. Registration, Login aur Protected Views banana (myapp/views.py):
+myapp/views.py file kholein aur pura code is updated version se replace karein:
+
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.authtoken.models import Token
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from .models import Task
+from .serializers import TaskSerializer
+
+# ----------------- AUTHENTICATION VIEWS -----------------
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+        return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.create_user(username=username, password=password)
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response({
+        'token': token.key,
+        'username': user.username,
+        'message': 'User registered successfully'
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({
+        'token': token.key,
+        'username': user.username
+    }, status=status.HTTP_200_OK)
+
+
+# ----------------- PROTECTED TASK VIEWS -----------------
+
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def task_list(request):
+    # Sirf us user ke tasks nikale jo logged in hai
+    if request.method == 'GET':
+        tasks = Task.objects.filter(user=request.user)
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            # Task ko request bhejne wale user ke sath attach karein
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def task_delete(request, pk):
+    try:
+        # Check karein task usi user ka ho
+        task = Task.objects.get(id=pk, user=request.user)
+        task.delete()
+        return Response({'message': 'Task deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found or unauthorized'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['PATCH'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def task_update(request, pk):
+    try:
+        task = Task.objects.get(id=pk, user=request.user)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found or unauthorized'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = TaskSerializer(instance=task, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+	
+	
+	
+
+	
+	
+	
+	
+	
+	--------------
+	5. myapp/urls.py mein Auth routes jodein
+	myapp/urls.py file kholein aur Register/Login ke endpoints add karein:
+	from django.urls import path
+from . import views
+
+urlpatterns = [
+    # Auth endpoints
+    path('api/register/', views.register_user, name='register'),
+    path('api/login/', views.login_user, name='login'),
+
+    # Task CRUD endpoints
+    path('', views.task_list, name='task-list'),
+    path('delete/<int:pk>/', views.task_delete, name='task-delete'),
+    path('update/<int:pk>/', views.task_update, name='task-update'),
+]
+
+
+
+
+
+
+*****************///////////////==============
+
+
+
+
+
+
+
+
+
+
+
+------------
+step5.b
+Step 5.b: React Layer (Login, Signup & Token Management)
+frontend/src/App.jsx ko Update karein:
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  // Authentication states
+  const [token, setToken] = useState(localStorage.getItem('token') || '')
+  const [username, setUsername] = useState(localStorage.getItem('username') || '')
+  const [isLoginMode, setIsLoginMode] = useState(true)
+  const [authUsername, setAuthUsername] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authError, setAuthError] = useState('')
+
+  // Task states
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+
+  // API Base URL
+  const BASE_URL = 'http://127.0.0.1:8000'
+
+  // Axios Authorization Header helper
+  const authConfig = {
+    headers: { Authorization: `Token ${token}` }
+  }
+
+  // 1. Auth: Login ya Register submit karna
+  const handleAuth = (e) => {
+    e.preventDefault()
+    setAuthError('')
+    const endpoint = isLoginMode ? `${BASE_URL}/api/login/` : `${BASE_URL}/api/register/`
+
+    axios.post(endpoint, {
+      username: authUsername,
+      password: authPassword
+    })
+    .then(response => {
+      const receivedToken = response.data.token
+      const receivedUser = response.data.username
+      
+      // Browser memory (localStorage) aur state dono me save karein
+      localStorage.setItem('token', receivedToken)
+      localStorage.setItem('username', receivedUser)
+      setToken(receivedToken)
+      setUsername(receivedUser)
+
+      setAuthUsername('')
+      setAuthPassword('')
+    })
+    .catch(error => {
+      const msg = error.response?.data?.error || 'Authentication failed. Please try again.'
+      setAuthError(msg)
+    })
+  }
+
+  // 2. Auth: Logout
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+    setToken('')
+    setUsername('')
+    setTasks([])
+  }
+
+  // 3. READ: Tasks fetch karna (Token ke sath)
+  const fetchTasks = () => {
+    if (!token) return
+    setLoading(true)
+    axios.get(`${BASE_URL}/`, authConfig)
+      .then(response => {
+        setTasks(response.data)
+        setLoading(false)
+      })
+      .catch(error => {
+        console.error("Error fetching tasks:", error)
+        if (error.response?.status === 401) handleLogout()
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    if (token) {
+      fetchTasks()
+    }
+  }, [token])
+
+  // 4. CREATE: Task add karna
+  const handleAddTask = (e) => {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+
+    axios.post(`${BASE_URL}/`, {
+      title: newTitle,
+      description: newDesc,
+      completed: false
+    }, authConfig)
+    .then(response => {
+      setTasks([...tasks, response.data])
+      setNewTitle('')
+      setNewDesc('')
+    })
+    .catch(error => console.error("Error creating task:", error))
+  }
+
+  // 5. UPDATE: Status Toggle karna
+  const handleToggleComplete = (task) => {
+    axios.patch(`${BASE_URL}/update/${task.id}/`, {
+      completed: !task.completed
+    }, authConfig)
+    .then(response => {
+      setTasks(tasks.map(t => t.id === task.id ? response.data : t))
+    })
+    .catch(error => console.error("Error updating task:", error))
+  }
+
+  // 6. DELETE: Task delete karna
+  const handleDeleteTask = (id) => {
+    axios.delete(`${BASE_URL}/delete/${id}/`, authConfig)
+      .then(() => {
+        setTasks(tasks.filter(task => task.id !== id))
+      })
+      .catch(error => console.error("Error deleting task:", error))
+  }
+
+  // Agar user logged in NAHI hai, toh Login/Register Screen dikhayein
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-extrabold text-slate-800">
+              {isLoginMode ? 'Sign In to Your Account' : 'Create New Account'}
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Step 5: Token-Based Authentication Flow
+            </p>
+          </div>
+
+          {authError && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-600 text-sm rounded-lg text-center font-medium">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Username</label>
+              <input 
+                type="text" 
+                value={authUsername}
+                onChange={(e) => setAuthUsername(e.target.value)}
+                placeholder="Enter your username"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+              <input 
+                type="password" 
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            <button 
+              type="submit" 
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm shadow-sm"
+            >
+              {isLoginMode ? 'Sign In' : 'Sign Up'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center text-sm text-slate-500">
+            {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+            <button 
+              onClick={() => {
+                setIsLoginMode(!isLoginMode)
+                setAuthError('')
+              }}
+              className="text-indigo-600 font-semibold hover:underline"
+            >
+              {isLoginMode ? 'Sign Up' : 'Sign In'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Agar user LOGGED IN hai, toh Tasks Dashboard dikhayein
+  return (
+    <div className="min-h-screen bg-slate-100 py-10 px-4 font-sans">
+      <div className="max-w-2xl mx-auto">
+        {/* Top bar with User Profile & Logout */}
+        <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+          <div>
+            <span className="text-xs uppercase tracking-wider text-slate-400 font-bold">Logged In As</span>
+            <p className="text-base font-bold text-slate-800">@{username}</p>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="text-xs bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+
+        <header className="text-center mb-8">
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+            Protected Task Manager
+          </h1>
+          <p className="text-slate-500 mt-2 text-sm font-medium">
+            Data isolated per user account
+          </p>
+        </header>
+
+        {/* Input Form */}
+        <form onSubmit={handleAddTask} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
+          <h2 className="text-lg font-bold text-slate-800">Add New Item</h2>
+          <div>
+            <input 
+              type="text" 
+              placeholder="Task Title (e.g. Test Auth Flow)"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              required
+            />
+          </div>
+          <div>
+            <input 
+              type="text" 
+              placeholder="Description (Optional)"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm shadow-sm"
+          >
+            Add Task
+          </button>
+        </form>
+
+        {/* Task List */}
+        <h2 className="text-xl font-bold text-slate-800 mb-4">Your Private Tasks</h2>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-3 text-slate-600 font-medium">Loading items...</span>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-500 border border-slate-200">
+            Aapke paas koi task nahi hai. Naya add kijiye!
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {tasks.map(task => (
+              <div 
+                key={task.id} 
+                className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center transition-all hover:shadow-md"
+              >
+                <div>
+                  <h3 className={`text-lg font-bold mb-1 transition-all ${
+                    task.completed ? 'line-through text-slate-400' : 'text-slate-800'
+                  }`}>
+                    {task.title}
+                  </h3>
+                  <p className={`text-sm ${
+                    task.completed ? 'text-slate-400' : 'text-slate-600'
+                  }`}>
+                    {task.description || "No description provided."}
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => handleToggleComplete(task)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full cursor-pointer transition-all border ${
+                      task.completed 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                        : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                    }`}
+                  >
+                    {task.completed ? '✓ Completed' : '⏳ Pending'}
+                  </button>
+
+                  <button 
+                    onClick={() => handleDeleteTask(task.id)}
+                    className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default App
+
+
+
+------step 5 completed
