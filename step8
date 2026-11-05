@@ -1041,7 +1041,7 @@ export default App
 
 
 
-
+//Django ke settings.py mein ALLOWED_HOSTS = ['*'] hona zaroori hai taaki wo phone ki request accept kare.
 
 
 -----------
