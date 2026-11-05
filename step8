@@ -1041,8 +1041,27 @@ export default App
 
 
 
-//Django ke settings.py mein ALLOWED_HOSTS = ['*'] hona zaroori hai taaki wo phone ki request accept kare.
+// Django ke settings.py mein ALLOWED_HOSTS = ['*'] hona zaroori hai taaki wo phone ki request accept kare.
 //pip install whitenoise
+
+//import os 
+from pathlib import Path
+DEBUG = False 
+ALLOWED_HOSTS = ['*']
+pip freeze > requirements.txt
+"""
+		MIDDLEWARE = [
+			'corsheaders.middleware.CorsMiddleware',
+			'django.middleware.security.SecurityMiddleware',
+			'whitenoise.middleware.WhiteNoiseMiddleware',  # SecurityMiddleware के ठीक नीचे जोड़ें
+			...
+		]
+
+		# settings.py के सबसे नीचे यह 3 लाइनें जोड़ें:
+		STATIC_URL = '/static/'
+		STATIC_ROOT = BASE_DIR / 'staticfiles'
+		STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+																							"""
 
 
 -----------
