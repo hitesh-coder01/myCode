@@ -1,0 +1,558 @@
+Step 7.a: Real Backend Shopping Cart (Models & APIs):
+-----
+1. myapp/models.py mein CartItem Model add karein:
+
+class CartItem(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cart_items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'product')  # Ek user ke cart mein ek hi product ki do alag rows na bane
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name} ({self.quantity})"
+		
+		
+		
+--------
+python manage.py makemigrations
+python manage.py migrate
+
+
+
+
+--------
+2. myapp/serializers.py ke aakhiri mein yeh add karein:
+
+from .models import CartItem
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.IntegerField(write_only=True)
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = ['id', 'product', 'product_id', 'quantity', 'subtotal']
+
+    def get_subtotal(self, obj):
+        return obj.product.price * obj.quantity
+		
+		
+		
+		
+		
+		
+--------------
+3.myapp/views.py ke bottom mein:
+
+from .models import CartItem
+from .serializers import CartItemSerializer
+
+# 1. User ka poora Cart dekhna (GET)
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def view_cart(request):
+    items = CartItem.objects.filter(user=request.user)
+    serializer = CartItemSerializer(items, many=True)
+    
+    # Backend par Grand Total calculate karna
+    total_amount = sum(item.product.price * item.quantity for item in items)
+    
+    return Response({
+        'items': serializer.data,
+        'total_amount': total_amount,
+        'total_items_count': sum(item.quantity for item in items)
+    })
+
+
+# 2. Cart mein Item Add karna ya Quantity badhana (POST)
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def add_to_cart(request):
+    product_id = request.data.get('product_id')
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    cart_item, created = CartItem.objects.get_or_create(user=request.user, product=product)
+    if not created:
+        cart_item.quantity += 1
+        cart_item.save()
+
+    serializer = CartItemSerializer(cart_item)
+    return Response(serializer.data, status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED)
+
+
+# 3. Cart se Item Delete karna (DELETE)
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def remove_from_cart(request, pk):
+    try:
+        cart_item = CartItem.objects.get(id=pk, user=request.user)
+        cart_item.delete()
+        return Response({'message': 'Item removed from cart'}, status=status.HTTP_204_NO_CONTENT)
+    except CartItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+		
+		
+		
+		
+		
+		
+		
+--------------
+4. myapp/urls.py mein Routes Register Karein:
+# Cart APIs (Protected)
+    path('api/cart/', views.view_cart, name='view-cart'),
+    path('api/cart/add/', views.add_to_cart, name='add-to-cart'),
+    path('api/cart/remove/<int:pk>/', views.remove_from_cart, name='remove-from-cart'),
+	
+	
+	
+	
+	
+	
+---------
+Step 7.b: React Slide-Over Cart Drawer & Persistent Cart State:
+frontend/src/App.jsx ko Update Karein:
+
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+
+function App() {
+  // Authentication states
+  const [token, setToken] = useState(localStorage.getItem('token') || '')
+  const [username, setUsername] = useState(localStorage.getItem('username') || '')
+  const [isLoginMode, setIsLoginMode] = useState(true)
+  const [authUsername, setAuthUsername] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authError, setAuthError] = useState('')
+
+  // Catalog states
+  const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [loading, setLoading] = useState(true)
+
+  // Cart Drawer states
+  const [cartItems, setCartItems] = useState([])
+  const [cartTotal, setCartTotal] = useState(0)
+  const [cartCount, setCartCount] = useState(0)
+  const [isCartOpen, setIsCartOpen] = useState(false)
+  const [actionMessage, setActionMessage] = useState('')
+
+  const BASE_URL = 'http://127.0.0.1:8000'
+
+  // Helper for Token Header
+  const getAuthConfig = () => ({
+    headers: { Authorization: `Token ${token}` }
+  })
+
+  // 1. Fetch Categories
+  const fetchCategories = () => {
+    axios.get(`${BASE_URL}/api/categories/`)
+      .then(res => setCategories(res.data))
+      .catch(err => console.error("Error fetching categories:", err))
+  }
+
+  // 2. Fetch Catalog Products
+  const fetchProducts = (category = 'All') => {
+    setLoading(true)
+    const url = category === 'All' 
+      ? `${BASE_URL}/api/products/` 
+      : `${BASE_URL}/api/products/?category=${encodeURIComponent(category)}`
+
+    axios.get(url)
+      .then(res => {
+        setProducts(res.data)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error("Error fetching products:", err)
+        setLoading(false)
+      })
+  }
+
+  // 3. Fetch Persistent Database Cart
+  const fetchCart = () => {
+    if (!token) {
+      setCartItems([])
+      setCartTotal(0)
+      setCartCount(0)
+      return
+    }
+
+    axios.get(`${BASE_URL}/api/cart/`, getAuthConfig())
+      .then(res => {
+        setCartItems(res.data.items || [])
+        setCartTotal(res.data.total_amount || 0)
+        setCartCount(res.data.total_items_count || 0)
+      })
+      .catch(err => {
+        console.error("Error fetching cart:", err)
+        if (err.response?.status === 401) handleLogout()
+      })
+  }
+
+  useEffect(() => {
+    fetchCategories()
+    fetchProducts('All')
+    if (token) fetchCart()
+  }, [token])
+
+  const handleCategoryChange = (categoryName) => {
+    setSelectedCategory(categoryName)
+    fetchProducts(categoryName)
+  }
+
+  // 4. Add To Cart (Backend Connected)
+  const handleAddToCart = (product) => {
+    if (!token) {
+      setActionMessage('Please login or signup to add items to your cart!')
+      setTimeout(() => setActionMessage(''), 3000)
+      return
+    }
+
+    axios.post(`${BASE_URL}/api/cart/add/`, {
+      product_id: product.id
+    }, getAuthConfig())
+    .then(() => {
+      fetchCart()
+      setActionMessage(`✓ Added "${product.name}" to cart!`)
+      setTimeout(() => setActionMessage(''), 2500)
+    })
+    .catch(err => {
+      console.error("Error adding to cart:", err)
+    })
+  }
+
+  // 5. Remove Item from Cart
+  const handleRemoveFromCart = (cartItemId) => {
+    axios.delete(`${BASE_URL}/api/cart/remove/${cartItemId}/`, getAuthConfig())
+      .then(() => {
+        fetchCart()
+      })
+      .catch(err => console.error("Error removing cart item:", err))
+  }
+
+  // 6. Auth Handler
+  const handleAuth = (e) => {
+    e.preventDefault()
+    setAuthError('')
+    const endpoint = isLoginMode ? `${BASE_URL}/api/login/` : `${BASE_URL}/api/register/`
+
+    axios.post(endpoint, {
+      username: authUsername,
+      password: authPassword
+    })
+    .then(res => {
+      localStorage.setItem('token', res.data.token)
+      localStorage.setItem('username', res.data.username)
+      setToken(res.data.token)
+      setUsername(res.data.username)
+      setAuthUsername('')
+      setAuthPassword('')
+    })
+    .catch(err => {
+      const msg = err.response?.data?.error || 'Authentication failed'
+      setAuthError(msg)
+    })
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+    setToken('')
+    setUsername('')
+    setCartItems([])
+    setCartTotal(0)
+    setCartCount(0)
+    setIsCartOpen(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 relative">
+      {/* 1. Header / Navbar */}
+      <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🛍️</span>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none">ApexStore</h1>
+              <span className="text-xs font-semibold text-indigo-600">Django + React E-Commerce</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Interactive Cart Button */}
+            <button 
+              onClick={() => setIsCartOpen(true)}
+              className="relative cursor-pointer bg-slate-100 hover:bg-slate-200 p-2.5 rounded-xl transition flex items-center gap-2 border border-slate-200"
+            >
+              <span className="text-lg">🛒</span>
+              <span className="text-xs font-bold text-slate-700 hidden sm:inline">Cart</span>
+              {cartCount > 0 && (
+                <span className="bg-indigo-600 text-white text-[11px] font-bold px-1.5 py-0.5 min-w-[20px] rounded-full shadow-sm text-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+
+            {/* Auth Profile Section */}
+            {token ? (
+              <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
+                <span className="text-sm font-semibold text-slate-700">@{username}</span>
+                <button
+                  onClick={handleLogout}
+                  className="text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-medium transition"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={authUsername}
+                  onChange={(e) => setAuthUsername(e.target.value)}
+                  className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg w-24 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={handleAuth}
+                  className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1 rounded-lg transition"
+                >
+                  {isLoginMode ? 'Login' : 'Signup'}
+                </button>
+                <button
+                  onClick={() => setIsLoginMode(!isLoginMode)}
+                  className="text-[11px] text-slate-500 underline"
+                >
+                  {isLoginMode ? 'New?' : 'Sign in'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* Action Notification Toast */}
+      {actionMessage && (
+        <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg transition-all animate-bounce">
+          {actionMessage}
+        </div>
+      )}
+
+      {authError && (
+        <div className="max-w-6xl mx-auto px-4 mt-2">
+          <p className="text-xs bg-rose-100 text-rose-700 p-2 rounded-lg text-center font-medium">{authError}</p>
+        </div>
+      )}
+
+      {/* 2. Hero & Category Tabs */}
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <header className="mb-6">
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Explore Collection</h2>
+          <p className="text-slate-500 text-sm mt-1">Multi-user persistent shopping cart connected to SQLite</p>
+        </header>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => handleCategoryChange('All')}
+            className={`text-xs font-semibold px-4 py-2 rounded-full transition ${
+              selectedCategory === 'All'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            All Products
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => handleCategoryChange(cat.name)}
+              className={`text-xs font-semibold px-4 py-2 rounded-full transition whitespace-nowrap ${
+                selectedCategory === cat.name
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Product Catalog Grid */}
+      <main className="max-w-6xl mx-auto px-4 pb-16">
+        {loading ? (
+          <div className="flex justify-center items-center py-24">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-3 text-slate-600 font-medium text-sm">Fetching catalog...</span>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="bg-white border border-slate-200 p-12 rounded-2xl text-center">
+            <p className="text-slate-500 font-medium">Is category me koi product nahi mila.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map(product => (
+              <div
+                key={product.id}
+                className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-52 bg-slate-100 overflow-hidden relative">
+                    <img
+                      src={product.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=60'}
+                      alt={product.name}
+                      className="w-full h-full object-cover object-center hover:scale-105 transition duration-300"
+                    />
+                    <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-md border border-slate-200/60 uppercase tracking-wide">
+                      {product.category_name}
+                    </span>
+                  </div>
+
+                  <div className="p-5">
+                    <h3 className="font-bold text-slate-900 text-lg leading-snug">{product.name}</h3>
+                    <p className="text-slate-500 text-xs mt-1 line-clamp-2 leading-relaxed">
+                      {product.description || 'No description provided.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold block">Price</span>
+                    <span className="text-lg font-black text-slate-900">
+                      ₹{Number(product.price).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handleAddToCart(product)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-sm active:scale-95"
+                  >
+                    Add to Cart
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* 4. Sliding Cart Drawer (Slide-Over Modal) */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Dark Backdrop */}
+          <div 
+            onClick={() => setIsCartOpen(false)} 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+          />
+
+          {/* Drawer Container */}
+          <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between z-10">
+            {/* Drawer Header */}
+            <div className="p-5 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900">Shopping Cart</h3>
+                <span className="text-xs text-slate-500 font-medium">
+                  {cartCount} item{cartCount !== 1 ? 's' : ''} in total
+                </span>
+              </div>
+              <button 
+                onClick={() => setIsCartOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Cart Items Scrollable List */}
+            <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              {!token ? (
+                <div className="text-center py-16">
+                  <span className="text-4xl block mb-2">🔒</span>
+                  <p className="text-sm font-semibold text-slate-700">Aap logged in nahi hain</p>
+                  <p className="text-xs text-slate-500 mt-1">Apna cart dekhne ke liye please login karein.</p>
+                </div>
+              ) : cartItems.length === 0 ? (
+                <div className="text-center py-16">
+                  <span className="text-4xl block mb-2">🛒</span>
+                  <p className="text-sm font-semibold text-slate-700">Aapka cart khali hai</p>
+                  <p className="text-xs text-slate-500 mt-1">Catalog se kuch naye products add kijiye!</p>
+                </div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} className="flex gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/80 items-center">
+                    <img 
+                      src={item.product.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=60'} 
+                      alt={item.product.name} 
+                      className="w-16 h-16 object-cover rounded-lg border border-slate-200 bg-white"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-slate-800 truncate">{item.product.name}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        ₹{Number(item.product.price).toLocaleString('en-IN')} × {item.quantity}
+                      </p>
+                      <p className="text-xs font-extrabold text-indigo-600 mt-1">
+                        Subtotal: ₹{Number(item.subtotal).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoveFromCart(item.id)}
+                      className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-2 rounded-lg transition"
+                      title="Remove item"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Drawer Footer / Checkout */}
+            {token && cartItems.length > 0 && (
+              <div className="p-5 border-t border-slate-200 bg-slate-50 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-600">Grand Total</span>
+                  <span className="text-2xl font-black text-slate-900">
+                    ₹{Number(cartTotal).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => alert(`Order placed for ₹${Number(cartTotal).toLocaleString('en-IN')}!`)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition active:scale-98 text-sm"
+                >
+                  Proceed to Checkout
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
+
+
+--------
+step7 completed
