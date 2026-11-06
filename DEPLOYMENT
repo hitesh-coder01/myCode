@@ -1,0 +1,143 @@
+deploy process:
+frontend ke liye website: vercel
+backend ke liye website: render
+database : render posql
+---------
+Step 1: Django Backend Setup (VS Code me)
+Packages install karein:
+pip install gunicorn whitenoise dj-database-url psycopg2-binary
+
+
+---------
+build.sh file banayein:
+Apne Django project ke root folder (jahan manage.py hai) me ek nayi file banayein jiska naam rakhein build.sh aur usme ye code daalein:
+//ye ura 5 line ka code paste krna he ,terminal me mt jana
+
+#!/usr/bin/env bash
+set -o errexit
+pip install -r requirements.txt
+python manage.py collectstatic --no-input
+python manage.py migrate
+
+
+...............
+GitHub par file folder push karein:
+github pe new repositary bnani he example name: "ecommerce fullstacak"
+".gitignore" file bnaye aur github par data push krna h
+
+[".gitignore" FILE BANANE KA PROCESS ISI FILE KE LAST ME DE RKHA HE]
+
+
+
+
+
+----------
+Step 2: Render par Backend Deploy Karein
+render.com par jayein aur GitHub se sign up / login karein.
+
+Dashboard par New + button par click karke Web Service chunein.
+
+Apna backend GitHub repository select karein aur connect karein.
+
+Form me ye details bharein:
+
+Name: Apne project ka naam (jaise: my-django-api)
+
+Language: Python 3
+
+Branch: main (ya master)
+
+Build Command: ./build.sh
+
+Start Command:
+gunicorn <project_name>.wsgi:application	
+
+Create Web Service par click karein.
+
+
+
+
+
+
+
+
+
+---------
+Step 3: React Frontend Setup (VS Code me)
+API Base URL check karein:
+Apne React project me jahan bhi aapne Axios ya fetch me [http://127.0.0.1:8000](http://127.0.0.1:8000) ya localhost:8000 likha tha, us URL ko badal kar apne Render backend ka link daal dein:
+
+JavaScript
+// Example
+const API_BASE_URL = "https://my-django-api.onrender.com";
+Build test karein:
+VS Code terminal me React folder me run karein:
+
+Bash
+npm run build
+(Agar bina error ke build ban rahi hai, toh project deploy ke liye ready hai).
+
+GitHub par push karein:
+Frontend project ko ek alag GitHub repository me commit aur push kar dein.
+
+Step 4: Vercel par Frontend Deploy Karein
+vercel.com par jayein aur GitHub se login karein.
+
+Add New... par click karke Project chunein.
+
+Apna React frontend repository select karein aur Import par click karein.
+
+Settings me:
+
+Framework Preset: Vite ya Create React App (Vercel khud detect kar leta hai).
+
+Root Directory check karein (agar repo ke andar subfolder hai toh choose karein, warna blank chhod dein).
+
+Deploy button par click karein.
+
+1 minute ke andar aapki website live ho jayegi aur aapko ek link mil jayega (jaise [https://your-project.vercel.app](https://your-project.vercel.app)).
+
+
+
+
+
+
+
+
+-------------------
+.gitignore Banane ke Steps (VS Code me)File Create Karein:VS Code ke File Explorer me jayein.Apne project ke root folder (project13_fullstack) me ek new file create karein.   File ka naam theek .gitignore rakhein (aage dot . lagana compulsory hai, iska koi extension jaise .txt nahi hota).Content Paste Karein:
+File khol kar Django aur React dono ke zaroori ignore rules likhein:Plaintext# Python & Django Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+
+# Virtual Environments
+venv/
+env/
+ENV/
+
+# React / Node Dependencies & Build
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+.vite/
+
+# Environment & Secrets (Keys/Passwords)
+.env
+.env.local
+*.env
+
+# OS & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
+File Save Karein:Ctrl + S daba kar file save karein.2. Syntax aur Rules (Kaise likha jata hai)Folder Ignore Karna: Kisi bhi folder ke naam ke aage hamesha slash / lagayein (e.g., node_modules/). Isse us folder ke andar ki saari sub-files ignore ho jati hain.Extension Wise Ignore (* Wildcard): Agar kisi specific extension ki sabhi files ignore karni hon, toh asterisk lagayein:*.pyc $\rightarrow$ saari compiled python files ignore hongi.*.log $\rightarrow$ saare log files ignore honge.Comment Dena (#): Kisi line ke aage # lagane par Git use comment manta hai aur read nahi karta (e.g., # React Files).Exception Rule (! Negation): Agar aapne poora folder ignore kiya hai par usme se koi ek file track karni hai:Plaintextsecrets/
+!secrets/example.txt
+Root vs Sub-directory:Agar aap likhte hain node_modules/, toh Git root aur har sub-folder (jaise frontend/node_modules/) me use ignore karega.3. Sabse Zaroori Dhyan Rakhne Yogya Baateingit add . chalane se pehle banana zaroori:Git sirf un files ko ignore karta hai jo untracked (pehle kabhi track na hui hon).Agar aapne .gitignore banane se pehle hi git add . ya git commit kar diya tha, toh .gitignore me naam daalne ke baad bhi Git use ignore nahi karega.Agar galti se file pehle track ho chuki ho toh Solution:
+Agar db.sqlite3 ya node_modules pehle hi Git cache me chala gaya hai, toh VS Code terminal me ye commands run karein:Bashgit rm -r --cached .
+git add .
+git commit -m "Fix .gitignore tracking"
+(Yeh command aapke local PC se files delete nahi karti, sirf Git ke tracking memory/index se hata deti hai).Sensitive Files kabhi push na karein:.env file ko hamesha .gitignore me rakhein taaki aapki secret keys, database passwords aur API tokens public GitHub par leak na hon.Production Database:Local SQLite database file (db.sqlite3) ko Git me push nahi karna chahiye, kyunki production deployment (Render) par database migrations ke through fresh setup hota hai.   
