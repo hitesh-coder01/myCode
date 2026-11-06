@@ -1,0 +1,53 @@
+setup
+
+
+
+"""
+05 nov26  ko mene jo setup kra vo mene  "project step 9" me rkh diya he ,mene vhi setup kra he 
+ye jo setup file dikh rhi he ye extra he ,ye setup mene aaj 5 nov ko nhi kra ,ye bs help ke liye he """
+
+import os
+from pathlib import Path
+
+
+
+# Development me True chalega, Render par DJANGO_DEBUG=False hone par apne aap False ban jayega
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+
+ALLOWED_HOSTS = ['*']
+
+# Application definition
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    # Third-party applications
+    'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
+
+    # Local application
+    'myapp',
+]
+
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Sabse top par
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # SecurityMiddleware ke theek niche
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+
+
+iske baad ye 2 command run kre:
+pip install django-cors-headers whitenoise gunicorn
+pip freeze > requirements.txt
