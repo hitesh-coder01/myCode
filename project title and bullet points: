@@ -1,0 +1,15 @@
+project title and bullet points:
+ApexStore – Commercial Full-Stack E-Commerce Platform
+
+Tech Stack: Python, Django, Django REST Framework, React.js, Tailwind CSS, SQLite, Token Auth
+
+Designed normalized relational database schemas with Django ORM, handling multi-user cart isolation and order management.
+
+Implemented atomic database transactions (@transaction.atomic) for concurrent stock deduction and price-snapshot preservation during checkout.
+
+Developed secure REST APIs featuring token-based authentication, dynamic Q-object catalog search, and multi-parameter price sorting.
+
+Built a responsive, multi-page client application with React Router v6, custom drawer modals, live quantity modification, and persistent browser storage.
+
+
+
